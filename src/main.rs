@@ -8,6 +8,8 @@ use colored::*;
 use std::env;
 use std::fs;
 use std::fs::DirEntry;
+use std::os::windows::prelude::MetadataExt;
+
 // use  std::cmp::Ordering;
 
 #[derive(Parser)]
@@ -25,12 +27,23 @@ enum DataParams {
     //this is for show hidden data of the arquives
     None,
     DataFlood, // show all data of the arquives
+    Permission,
+    LastModified,
 } //make impl for each one of this
 impl DataParams {
     fn show_data(&self,meta_data : &DirEntry) -> (i8,String) {
+        
         match self {
             DataParams::None => (0,String::from("")),
-            DataParams::DataFlood => (2, format!("{:?}", meta_data.metadata().unwrap())),
+            DataParams::DataFlood => (2, format!("{:?}", meta_data.metadata().unwrap()).color(Color::Red).to_string()),
+            DataParams::Permission => (-1 ,format!("{:?}", meta_data.metadata().unwrap().file_attributes())),
+            DataParams::LastModified =>{
+                let  time = meta_data.metadata().unwrap().modified().unwrap().elapsed().unwrap().as_secs();
+                let  hours = time / 3600;
+                let minutes = (time % 3600)/60;
+                let seconds = (time % 3600)%60;
+                 (1,format!("Hs {}  mins {} secs {}",hours,minutes,seconds ).color(Color::Yellow).to_string())
+                },
         }
     }
 }
@@ -65,6 +78,8 @@ fn main() {
                         // in future I can think if it's a huge problem
                         "-a" => filterparams = FilterParams::Hidden,
                         "-df" => dataparams.push(DataParams::DataFlood),
+                        "-p" => dataparams.push(DataParams::Permission),
+                        "-lm" => dataparams.push(DataParams::LastModified),
                         _ => panic!("invalid param: {}", args[i].as_str()),
                     }
                 }
@@ -94,12 +109,10 @@ fn ls(path: &String, params: (Vec<DataParams>, FilterParams)) {
                                 }
                             }
                         }
-                         print!("----\n{:?}  ",params.0);
+                         print!("\n\n{:?}  ",params.0);
                         // if you will goin to make a files filter, add a new arm match
                         // if not, you gonna make a if in the print method
 
-                        let mut response : Vec<(i8,String)> = Vec::new(); //this will join the data of arquive to show in terminal
-                        response.push((0,dir_info.file_name().to_string_lossy().to_string()));
                         // another Idea is to make a long print! with all the data is showin
                         //like print"("{} {}",dir_info.filename(),permissions)
                         /*if I the code receive a param to see the permissions, the var permissions will have
@@ -110,17 +123,24 @@ fn ls(path: &String, params: (Vec<DataParams>, FilterParams)) {
                         //I think this will gonna be bether using a vector of DataParams and use for
 
                         //put this if in the implement DataParams????
-                        let file_name = dir_info.file_name().to_string_lossy().to_string();
-                        if dir_info.metadata().unwrap().is_dir() {
-                           file_name.blue();
+                       let mut response : Vec<(i8,String)> = Vec::new(); //this will join the data of arquive to show in terminal
+                        
+                        match dir_info.metadata().unwrap().is_dir() {
+                             true => {
+                                response.push((0,dir_info.file_name().to_string_lossy().to_string().color(Color::Blue).to_string()));
+                            }
+                            false => {
+                                response.push((0,dir_info.file_name().to_string_lossy().to_string().color(Color::White).to_string()));
+                            }
                         }
                         for param in &params.0 {
-                            let (pos,data) = param.show_data(&dir_info);
-                            response.push((pos,data));
-                           response.sort_by_key(|k| k.0)
+                        response.push(param.show_data(&dir_info));
                         }
-                        
-                        print!("{:?}\n",response);
+                        response.sort_by_key(|k| k.0);
+                        for i in response {
+                            print!("{} ",i.1);
+                        }
+          
                     }
                     Err(_) => panic!("OOOOO SHIT"),
                 }
